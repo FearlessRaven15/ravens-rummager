@@ -1,6 +1,4 @@
 
-
-
 import os
 import discord
 from playwright.async_api import async_playwright
@@ -25,26 +23,72 @@ async def inspect_thgl():
         async def handle_response(response):
             url = response.url
 
+            # Alleen de Rummage-pagina's bekijken
             if "/rummage-pile?map=" not in url:
                 return
 
             print()
-            print("========================================")
+            print("=" * 60)
             print("🎯 RUMMAGE MAP RESPONSE FOUND!")
-            print("========================================")
+            print("=" * 60)
             print(f"URL: {url}")
             print(f"STATUS: {response.status}")
 
             try:
                 body = await response.text()
 
-                print()
-                print("========== RESPONSE BODY ==========")
-                print(body[:30000])
-                print("========== END RESPONSE ==========")
+                print(f"RESPONSE LENGTH: {len(body)}")
 
-            except Exception as e:
-                print(f"❌ Could not read response: {e}")
+                lower_body = body.lower()
+
+                keywords = [
+                    "rummage",
+                    "pile",
+                    "location",
+                    "latitude",
+                    "longitude",
+                    "coordinates",
+                    "marker",
+                    "position",
+                    "x",
+                    "y",
+                    "z",
+                ]
+
+                for keyword in keywords:
+                    print()
+                    print("=" * 50)
+                    print(f"🔎 SEARCH: {keyword.upper()}")
+                    print("=" * 50)
+
+                    start = 0
+                    found = 0
+
+                    while True:
+                        position = lower_body.find(keyword, start)
+
+                        if position == -1:
+                            break
+
+                        # Stukje vóór en na de gevonden tekst tonen
+                        beginning = max(0, position - 500)
+                        ending = min(len(body), position + 1500)
+
+                        print(body[beginning:ending])
+                        print("\n----------\n")
+
+                        start = position + len(keyword)
+                        found += 1
+
+                        # Maximaal 10 resultaten per zoekwoord
+                        if found >= 10:
+                            break
+
+                    if found == 0:
+                        print("Geen resultaat gevonden.")
+
+            except Exception as error:
+                print(f"❌ Kon response niet lezen: {error}")
 
         page.on("response", handle_response)
 
@@ -54,10 +98,13 @@ async def inspect_thgl():
             timeout=120000
         )
 
-        await page.wait_for_timeout(10000)
+        # Geef de dynamische kaart extra tijd om te laden
+        await page.wait_for_timeout(15000)
 
         print()
-        print("🐦 Finished inspecting Rummage data.")
+        print("=" * 60)
+        print("🐦 KLAAR MET THGL INSPECTIE")
+        print("=" * 60)
 
         await browser.close()
 
