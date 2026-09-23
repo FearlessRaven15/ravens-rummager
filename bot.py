@@ -1,106 +1,129 @@
 
+import asyncio
+import re
 
-import os
-import discord
 from playwright.async_api import async_playwright
 
-DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-CHANNEL_ID = int(os.environ["CHANNEL_ID"])
-
-URL = "https://palia.th.gl/rummage-pile?map=bahari-bay"
-
-intents = discord.Intents.none()
-client = discord.Client(intents=intents)
+THGL_URL = "https://palia.th.gl/rummage-pile?map=bahari-bay"
 
 
-async def inspect():
+async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-
         page = await browser.new_page()
 
-        print("🐦 Raven's Rummager")
-        print("🌐 Loading THGL...")
-
-        async def response_handler(response):
-            url = response.url
-
-            if "palia.th.gl" not in url:
-                return
-
-            if response.request.resource_type not in ["fetch", "xhr"]:
-                return
-
-            print()
-            print("=" * 70)
-            print("🌐 FETCH/XHR")
-            print("=" * 70)
-            print(url)
-            print("STATUS:", response.status)
-
-            try:
-                text = await response.text()
-
-                print("LENGTH:", len(text))
-
-                # Zoek naar mogelijke data-objecten
-                interesting = [
-                    "rummage",
-                    "chapaa",
-                    "pile",
-                    "marker",
-                    "markers",
-                    "locations",
-                    "locations",
-                    "filters",
-                    "mapId",
-                    "map_id",
-                    "coordinates",
-                ]
-
-                lower = text.lower()
-
-                found = [
-                    word for word in interesting
-                    if word.lower() in lower
-                ]
-
-                if found:
-                    print("⭐ KEYWORDS:", ", ".join(found))
-                    print()
-                    print(text[:15000])
-
-            except Exception as e:
-                print("READ ERROR:", e)
-
-        page.on("response", response_handler)
+        print("🐦‍⬛ Raven's Rummager")
+        print("🔎 TH.GL JavaScript onderzoeken...")
+        print()
 
         await page.goto(
-            URL,
+            THGL_URL,
             wait_until="networkidle",
             timeout=120000
         )
 
-        await page.wait_for_timeout(20000)
+        await page.wait_for_timeout(8000)
+
+        scripts = await page.locator("script[src]").evaluate_all(
+            """els => els.map(e => e.src).filter(Boolean)"""
+        )
+
+        scripts = list(dict.fromkeys(scripts))
+
+        print(f"📦 JavaScript bestanden gevonden: {len(scripts)}")
+        print()
+
+        interesting = []
+
+        keywords = [
+            "/api/",
+            "api.",
+            "rummage",
+            "pile",
+            "location",
+            "locations",
+            "data-forge",
+            "actors",
+            "graphql",
+            "fetch(",
+            "axios",
+        ]
+
+        for i, script_url in enumerate(scripts, 1):
+            print(f"[{i}/{len(scripts)}] {script_url}")
+
+            try:
+                response = await page.request.get(
+                    script_url,
+                    timeout=30000
+                )
+
+                if not response.ok:
+                    print("   ❌ HTTP", response.status)
+                    continue
+
+                text = await response.text()
+
+                found = []
+
+                for keyword in keywords:
+                    if keyword.lower() in text.lower():
+                        found.append(keyword)
+
+                if found:
+                    print("   ⭐", ", ".join(found))
+                    interesting.append((script_url, text))
+
+            except Exception as e:
+                print("   ⚠️", str(e))
 
         print()
         print("=" * 70)
-        print("🐦 DONE")
+        print("🔍 MOGELIJK INTERESSANTE API-ENDPOINTS")
+        print("=" * 70)
+
+        seen = set()
+
+        url_pattern = re.compile(
+            r'https?://[^"\'\\\s]+',
+            re.IGNORECASE
+        )
+
+        api_pattern = re.compile(
+            r'["\'`]([^"\'`]*?/api/[^"\'`]*)["\'`]',
+            re.IGNORECASE
+        )
+
+        for script_url, text in interesting:
+
+            matches = []
+
+            matches.extend(url_pattern.findall(text))
+            matches.extend(api_pattern.findall(text))
+
+            for match in matches:
+                clean = match.replace("\\/", "/")
+
+                if (
+                    "th.gl" in clean
+                    or "/api/" in clean.lower()
+                    or "actor" in clean.lower()
+                    or "rummage" in clean.lower()
+                    or "location" in clean.lower()
+                    or "forge" in clean.lower()
+                ):
+                    if clean not in seen:
+                        seen.add(clean)
+
+                        print()
+                        print("📌", clean[:1000])
+
+        print()
+        print("=" * 70)
+        print(f"✅ Unieke interessante endpoints: {len(seen)}")
         print("=" * 70)
 
         await browser.close()
 
 
-async def main():
-    await inspect()
-
-
-@client.event
-async def on_ready():
-    try:
-        await main()
-    finally:
-        await client.close()
-
-
-client.run(DISCORD_TOKEN)
+asyncio.run(main())
