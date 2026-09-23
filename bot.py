@@ -1,4 +1,5 @@
 
+
 import os
 import discord
 from playwright.async_api import async_playwright
@@ -15,52 +16,20 @@ client = discord.Client(intents=intents)
 async def inspect_thgl():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-
         page = await browser.new_page()
 
         print("🐦 Raven's Rummager starting...")
         print(f"🌐 Opening: {THGL_URL}")
 
-        async def handle_response(response):
-            request_type = response.request.resource_type
+        requests = []
 
-            if request_type not in {"xhr", "fetch"}:
-                return
+        async def handle_request(request):
+            url = request.url
 
-            print()
-            print("🔎 NETWORK REQUEST")
-            print(f"Status: {response.status}")
-            print(f"Type:   {request_type}")
-            print(f"URL:    {response.url}")
+            if "palia.th.gl" in url:
+                requests.append((request.resource_type, url))
 
-            content_type = response.headers.get("content-type", "")
-
-            if "json" in content_type:
-                try:
-                    body = await response.text()
-
-                    keywords = [
-                        "rummage",
-                        "pile",
-                        "chapaa",
-                        "kilima",
-                        "bahari",
-                        "elderwood",
-                        "highlands",
-                        "location",
-                        "coordinate",
-                    ]
-
-                    lower_body = body.lower()
-
-                    if any(keyword in lower_body for keyword in keywords):
-                        print("⭐ POSSIBLE RUMMAGE DATA FOUND!")
-                        print(body[:10000])
-
-                except Exception as e:
-                    print(f"Could not read response: {e}")
-
-        page.on("response", handle_response)
+        page.on("request", handle_request)
 
         await page.goto(
             THGL_URL,
@@ -68,10 +37,35 @@ async def inspect_thgl():
             timeout=120000
         )
 
-        print("✅ Page loaded.")
-
-        # Give the dynamic map/API time to load.
         await page.wait_for_timeout(10000)
+
+        print()
+        print("========== ALL THGL RESOURCES ==========")
+
+        for resource_type, url in requests:
+            print(f"[{resource_type}] {url}")
+
+        print()
+        print("========== PERFORMANCE RESOURCES ==========")
+
+        resources = await page.evaluate("""
+            () => performance.getEntriesByType('resource')
+                .map(x => x.name)
+                .filter(x => x.includes('palia.th.gl'))
+        """)
+
+        for url in resources:
+            print(url)
+
+        print()
+        print("========== JAVASCRIPT FILES ==========")
+
+        scripts = await page.locator("script[src]").evaluate_all(
+            "(els) => els.map(e => e.src)"
+        )
+
+        for url in scripts:
+            print(url)
 
         print()
         print("========== PAGE TEXT ==========")
