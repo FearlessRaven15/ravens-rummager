@@ -13,7 +13,7 @@ async def main():
         page = await browser.new_page()
 
         print("🐦‍⬛ Raven's Rummager")
-        print("🔎 TH.GL JavaScript onderzoeken...")
+        print("🔎 Alleen TH.GL endpoints zoeken...")
         print()
 
         await page.goto(
@@ -24,7 +24,9 @@ async def main():
 
         await page.wait_for_timeout(8000)
 
-        scripts = await page.locator("script[src]").evaluate_all(
+        scripts = await page.locator(
+            "script[src]"
+        ).evaluate_all(
             """els => els.map(e => e.src).filter(Boolean)"""
         )
 
@@ -36,17 +38,17 @@ async def main():
         interesting = []
 
         keywords = [
-            "/api/",
-            "api.",
             "rummage",
             "pile",
             "location",
             "locations",
-            "data-forge",
+            "actor",
             "actors",
-            "graphql",
-            "fetch(",
-            "axios",
+            "th.gl",
+            "/api/",
+            "data-forge",
+            "api-forge",
+            "memory-access",
         ]
 
         for i, script_url in enumerate(scripts, 1):
@@ -59,7 +61,6 @@ async def main():
                 )
 
                 if not response.ok:
-                    print("   ❌ HTTP", response.status)
                     continue
 
                 text = await response.text()
@@ -79,16 +80,18 @@ async def main():
 
         print()
         print("=" * 70)
-        print("🔍 MOGELIJK INTERESSANTE API-ENDPOINTS")
+        print("🐦‍⬛ TH.GL — MOGELIJKE API-ENDPOINTS")
         print("=" * 70)
 
         seen = set()
 
+        # Volledige URLs zoeken
         url_pattern = re.compile(
-            r'https?://[^"\'\\\s]+',
+            r'https?://[^"\'\\\s<>]+',
             re.IGNORECASE
         )
 
+        # Relatieve API-routes zoeken
         api_pattern = re.compile(
             r'["\'`]([^"\'`]*?/api/[^"\'`]*)["\'`]',
             re.IGNORECASE
@@ -104,23 +107,29 @@ async def main():
             for match in matches:
                 clean = match.replace("\\/", "/")
 
+                # Alleen relevante TH.GL-resultaten tonen
+                lower = clean.lower()
+
                 if (
-                    "th.gl" in clean
-                    or "/api/" in clean.lower()
-                    or "actor" in clean.lower()
-                    or "rummage" in clean.lower()
-                    or "location" in clean.lower()
-                    or "forge" in clean.lower()
+                    "palia.th.gl" in lower
+                    or "api.th.gl" in lower
+                    or "th.gl/api" in lower
+                    or "/api/" in lower
+                    or "rummage" in lower
+                    or "pile" in lower
+                    or "actor" in lower
+                    or "location" in lower
+                    or "forge" in lower
                 ):
                     if clean not in seen:
                         seen.add(clean)
 
                         print()
-                        print("📌", clean[:1000])
+                        print("📌", clean[:1500])
 
         print()
         print("=" * 70)
-        print(f"✅ Unieke interessante endpoints: {len(seen)}")
+        print(f"✅ TH.GL resultaten gevonden: {len(seen)}")
         print("=" * 70)
 
         await browser.close()
