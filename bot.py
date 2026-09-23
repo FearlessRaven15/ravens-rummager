@@ -1,5 +1,6 @@
 
 
+
 import os
 import discord
 from playwright.async_api import async_playwright
@@ -21,15 +22,31 @@ async def inspect_thgl():
         print("🐦 Raven's Rummager starting...")
         print(f"🌐 Opening: {THGL_URL}")
 
-        requests = []
+        async def handle_response(response):
+            url = response.url
 
-        async def handle_request(request):
-            url = request.url
+            if "/rummage-pile?map=" not in url:
+                return
 
-            if "palia.th.gl" in url:
-                requests.append((request.resource_type, url))
+            print()
+            print("========================================")
+            print("🎯 RUMMAGE MAP RESPONSE FOUND!")
+            print("========================================")
+            print(f"URL: {url}")
+            print(f"STATUS: {response.status}")
 
-        page.on("request", handle_request)
+            try:
+                body = await response.text()
+
+                print()
+                print("========== RESPONSE BODY ==========")
+                print(body[:30000])
+                print("========== END RESPONSE ==========")
+
+            except Exception as e:
+                print(f"❌ Could not read response: {e}")
+
+        page.on("response", handle_response)
 
         await page.goto(
             THGL_URL,
@@ -40,41 +57,7 @@ async def inspect_thgl():
         await page.wait_for_timeout(10000)
 
         print()
-        print("========== ALL THGL RESOURCES ==========")
-
-        for resource_type, url in requests:
-            print(f"[{resource_type}] {url}")
-
-        print()
-        print("========== PERFORMANCE RESOURCES ==========")
-
-        resources = await page.evaluate("""
-            () => performance.getEntriesByType('resource')
-                .map(x => x.name)
-                .filter(x => x.includes('palia.th.gl'))
-        """)
-
-        for url in resources:
-            print(url)
-
-        print()
-        print("========== JAVASCRIPT FILES ==========")
-
-        scripts = await page.locator("script[src]").evaluate_all(
-            "(els) => els.map(e => e.src)"
-        )
-
-        for url in scripts:
-            print(url)
-
-        print()
-        print("========== PAGE TEXT ==========")
-
-        text = await page.locator("body").inner_text()
-        print(text[:15000])
-
-        print()
-        print("========== END DEBUG ==========")
+        print("🐦 Finished inspecting Rummage data.")
 
         await browser.close()
 
