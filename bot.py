@@ -1,4 +1,5 @@
 
+
 import os
 import discord
 from playwright.async_api import async_playwright
@@ -6,111 +7,92 @@ from playwright.async_api import async_playwright
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 CHANNEL_ID = int(os.environ["CHANNEL_ID"])
 
-THGL_URL = "https://palia.th.gl/rummage-pile"
+URL = "https://palia.th.gl/rummage-pile?map=bahari-bay"
 
 intents = discord.Intents.none()
 client = discord.Client(intents=intents)
 
 
-async def inspect_thgl():
+async def inspect():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+
         page = await browser.new_page()
 
-        print("🐦 Raven's Rummager starting...")
-        print(f"🌐 Opening: {THGL_URL}")
+        print("🐦 Raven's Rummager")
+        print("🌐 Loading THGL...")
 
-        async def handle_response(response):
+        async def response_handler(response):
             url = response.url
 
-            # Alleen de Rummage-pagina's bekijken
-            if "/rummage-pile?map=" not in url:
+            if "palia.th.gl" not in url:
+                return
+
+            if response.request.resource_type not in ["fetch", "xhr"]:
                 return
 
             print()
-            print("=" * 60)
-            print("🎯 RUMMAGE MAP RESPONSE FOUND!")
-            print("=" * 60)
-            print(f"URL: {url}")
-            print(f"STATUS: {response.status}")
+            print("=" * 70)
+            print("🌐 FETCH/XHR")
+            print("=" * 70)
+            print(url)
+            print("STATUS:", response.status)
 
             try:
-                body = await response.text()
+                text = await response.text()
 
-                print(f"RESPONSE LENGTH: {len(body)}")
+                print("LENGTH:", len(text))
 
-                lower_body = body.lower()
-
-                keywords = [
+                # Zoek naar mogelijke data-objecten
+                interesting = [
                     "rummage",
+                    "chapaa",
                     "pile",
-                    "location",
-                    "latitude",
-                    "longitude",
-                    "coordinates",
                     "marker",
-                    "position",
-                    "x",
-                    "y",
-                    "z",
+                    "markers",
+                    "locations",
+                    "locations",
+                    "filters",
+                    "mapId",
+                    "map_id",
+                    "coordinates",
                 ]
 
-                for keyword in keywords:
+                lower = text.lower()
+
+                found = [
+                    word for word in interesting
+                    if word.lower() in lower
+                ]
+
+                if found:
+                    print("⭐ KEYWORDS:", ", ".join(found))
                     print()
-                    print("=" * 50)
-                    print(f"🔎 SEARCH: {keyword.upper()}")
-                    print("=" * 50)
+                    print(text[:15000])
 
-                    start = 0
-                    found = 0
+            except Exception as e:
+                print("READ ERROR:", e)
 
-                    while True:
-                        position = lower_body.find(keyword, start)
-
-                        if position == -1:
-                            break
-
-                        # Stukje vóór en na de gevonden tekst tonen
-                        beginning = max(0, position - 500)
-                        ending = min(len(body), position + 1500)
-
-                        print(body[beginning:ending])
-                        print("\n----------\n")
-
-                        start = position + len(keyword)
-                        found += 1
-
-                        # Maximaal 10 resultaten per zoekwoord
-                        if found >= 10:
-                            break
-
-                    if found == 0:
-                        print("Geen resultaat gevonden.")
-
-            except Exception as error:
-                print(f"❌ Kon response niet lezen: {error}")
-
-        page.on("response", handle_response)
+        page.on("response", response_handler)
 
         await page.goto(
-            THGL_URL,
+            URL,
             wait_until="networkidle",
             timeout=120000
         )
 
-        # Geef de dynamische kaart extra tijd om te laden
-        await page.wait_for_timeout(15000)
+        await page.wait_for_timeout(20000)
 
         print()
-        print("=" * 60)
-        print("🐦 KLAAR MET THGL INSPECTIE")
-        print("=" * 60)
+        print("=" * 70)
+        print("🐦 DONE")
+        print("=" * 70)
 
         await browser.close()
 
 
 async def main():
-    await inspect_thgl()
+    await inspect()
 
 
 @client.event
