@@ -1,0 +1,2 @@
+discord.py>=2.6,<3
+playwright>=1.55,<2
