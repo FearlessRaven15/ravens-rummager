@@ -1,4 +1,5 @@
 
+
 import asyncio
 import re
 
@@ -10,10 +11,11 @@ THGL_URL = "https://palia.th.gl/rummage-pile?map=bahari-bay"
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+
         page = await browser.new_page()
 
         print("🐦‍⬛ Raven's Rummager")
-        print("🔎 Alleen TH.GL endpoints zoeken...")
+        print("🔎 TH.GL Rummage-data zoeken...")
         print()
 
         await page.goto(
@@ -32,27 +34,12 @@ async def main():
 
         scripts = list(dict.fromkeys(scripts))
 
-        print(f"📦 JavaScript bestanden gevonden: {len(scripts)}")
+        print(f"📦 Scripts gevonden: {len(scripts)}")
         print()
 
-        interesting = []
-
-        keywords = [
-            "rummage",
-            "pile",
-            "location",
-            "locations",
-            "actor",
-            "actors",
-            "th.gl",
-            "/api/",
-            "data-forge",
-            "api-forge",
-            "memory-access",
-        ]
+        found_any = False
 
         for i, script_url in enumerate(scripts, 1):
-            print(f"[{i}/{len(scripts)}] {script_url}")
 
             try:
                 response = await page.request.get(
@@ -64,73 +51,91 @@ async def main():
                     continue
 
                 text = await response.text()
+                lower = text.lower()
 
-                found = []
+                # Zoek alleen scripts die echt iets met Rummage/Pile te maken hebben
+                important_words = [
+                    "rummage",
+                    "rummage-pile",
+                    "rummagepile",
+                    "pilelocation",
+                    "pilelocations",
+                    "pile-location",
+                    "pile_location"
+                ]
 
-                for keyword in keywords:
-                    if keyword.lower() in text.lower():
-                        found.append(keyword)
+                matches = [
+                    word for word in important_words
+                    if word in lower
+                ]
 
-                if found:
-                    print("   ⭐", ", ".join(found))
-                    interesting.append((script_url, text))
+                if not matches:
+                    continue
 
-            except Exception as e:
-                print("   ⚠️", str(e))
+                found_any = True
+
+                print()
+                print("=" * 80)
+                print("⭐ INTERESSANT SCRIPT")
+                print("=" * 80)
+                print(script_url)
+                print()
+                print("Gevonden woorden:", ", ".join(matches))
+                print()
+
+                # Toon stukjes code rond elk Rummage-resultaat
+                shown = set()
+
+                for word in matches:
+
+                    start = 0
+
+                    while True:
+
+                        position = lower.find(word, start)
+
+                        if position == -1:
+                            break
+
+                        snippet_start = max(0, position - 500)
+                        snippet_end = min(
+                            len(text),
+                            position + 1000
+                        )
+
+                        snippet = text[
+                            snippet_start:snippet_end
+                        ]
+
+                        # Geen identieke stukken dubbel tonen
+                        clean_key = snippet[:300]
+
+                        if clean_key not in shown:
+                            shown.add(clean_key)
+
+                            print("----- CODE RONDOM", word, "-----")
+                            print(snippet)
+                            print()
+                            print("-" * 80)
+
+                        start = position + len(word)
+
+                        # Niet duizenden regels dumpen
+                        if len(shown) >= 10:
+                            break
+
+                    if len(shown) >= 10:
+                        break
 
         print()
-        print("=" * 70)
-        print("🐦‍⬛ TH.GL — MOGELIJKE API-ENDPOINTS")
-        print("=" * 70)
+        print("=" * 80)
 
-        seen = set()
+        if found_any:
+            print("🐦‍⬛ KLAAR — bovenstaande code is interessant!")
+        else:
+            print("❌ Geen Rummage-code gevonden.")
 
-        # Volledige URLs zoeken
-        url_pattern = re.compile(
-            r'https?://[^"\'\\\s<>]+',
-            re.IGNORECASE
-        )
-
-        # Relatieve API-routes zoeken
-        api_pattern = re.compile(
-            r'["\'`]([^"\'`]*?/api/[^"\'`]*)["\'`]',
-            re.IGNORECASE
-        )
-
-        for script_url, text in interesting:
-
-            matches = []
-
-            matches.extend(url_pattern.findall(text))
-            matches.extend(api_pattern.findall(text))
-
-            for match in matches:
-                clean = match.replace("\\/", "/")
-
-                # Alleen relevante TH.GL-resultaten tonen
-                lower = clean.lower()
-
-                if (
-                    "palia.th.gl" in lower
-                    or "api.th.gl" in lower
-                    or "th.gl/api" in lower
-                    or "/api/" in lower
-                    or "rummage" in lower
-                    or "pile" in lower
-                    or "actor" in lower
-                    or "location" in lower
-                    or "forge" in lower
-                ):
-                    if clean not in seen:
-                        seen.add(clean)
-
-                        print()
-                        print("📌", clean[:1500])
-
-        print()
-        print("=" * 70)
-        print(f"✅ TH.GL resultaten gevonden: {len(seen)}")
-        print("=" * 70)
+        print("=" * 80)
 
         await browser.close()
 
